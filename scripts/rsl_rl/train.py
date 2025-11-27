@@ -102,9 +102,27 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
+import pickle
+import yaml
+
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import dump_pickle, dump_yaml
+from isaaclab.utils import class_to_dict
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
+
+# Helper functions for dumping configs (if not available in isaaclab.utils.io)
+def dump_yaml(filepath: str, data):
+    """Dump data to YAML file."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    if not isinstance(data, dict):
+        data = class_to_dict(data)
+    with open(filepath, "w") as f:
+        yaml.dump(data, f, default_flow_style=None, sort_keys=False)
+
+def dump_pickle(filepath: str, data):
+    """Dump data to pickle file."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "wb") as f:
+        pickle.dump(data, f)
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 

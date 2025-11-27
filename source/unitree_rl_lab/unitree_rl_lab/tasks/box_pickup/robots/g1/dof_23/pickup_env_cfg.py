@@ -38,7 +38,7 @@ class BoxRangeCfg:
     size_z: tuple[float, float] = (0.2, 0.45)
     # box initial position ranges relative to robot at (0,0,0) [m]
     # 35-40 cm in front (Y), ±15 cm to side (X)
-    pos_x: tuple[float, float] = (-0.3, -0.40)
+    pos_x: tuple[float, float] = (0.3, 0.40)
     pos_y: tuple[float, float] = (-0.15, 0.15)
     pos_z: tuple[float, float] = (0.0, 0.8)
     # initial yaw angle range [rad] (allow ±22.5 degrees around Z)
@@ -48,7 +48,7 @@ class BoxRangeCfg:
     dynamic_friction: tuple[float, float] = (0.3, 1.0)
     
     # target position ranges relative to robot at (0,0,0) [m]
-    target_pos_x: tuple[float, float] = (-0.3, -0.40)
+    target_pos_x: tuple[float, float] = (0.3, 0.40)
     target_pos_y: tuple[float, float] = (-0.15, 0.15)
     target_pos_z: tuple[float, float] = (0.0, 0.8)
     # target yaw angle range [rad]
@@ -345,12 +345,66 @@ class ObservationsCfg:
 
 @configclass
 class RewardsCfg:
-    """Reward terms for the MDP."""
+    """Reward terms for the MDP.
+    
+    Based on paper: R = R_traj + R_box + R_stand + R_reg
+    - R_traj: Hand trajectory tracking (r_hand_pos + r_hand_roll)
+    - R_box: Box interaction (r_contact + r_lift + r_target_pos + r_flat)
+    - R_stand: Standing stability
+    - R_reg: Regularization (energy, action rate, etc.)
+    """
 
     # -- task
     alive = RewTerm(func=mdp.is_alive, weight=0.15)
 
-    # -- base
+    # -- R_traj: Hand trajectory rewards
+    hand_position_tracking = RewTerm(
+        func=mdp.hand_position_tracking,
+        weight=-1.0,  # Penalize deviation from target hand positions
+    )
+    hand_roll_penalty = RewTerm(
+        func=mdp.hand_roll_penalty,
+        weight=-0.5,  # Penalize hand roll angles
+    )
+
+    # -- R_box: Box interaction rewards
+    box_contact = RewTerm(
+        func=mdp.box_contact_reward,
+        weight=1.0,  # Reward contact with box during contact phase
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*wrist.*|.*hand.*"]),
+            "contact_phase_threshold": 0.9,
+        },
+    )
+    box_lift = RewTerm(
+        func=mdp.box_lift_reward,
+        weight=2.0,  # Reward lifting box during lift phase
+        params={"lift_height_threshold": 0.1},
+    )
+    box_target_position = RewTerm(
+        func=mdp.box_target_position_reward,
+        weight=1.0,  # Reward moving box to target position
+        params={"position_tolerance": 0.05},
+    )
+    box_flat_orientation = RewTerm(
+        func=mdp.box_flat_orientation_reward,
+        weight=0.5,  # Reward keeping box flat (no pitch/roll)
+    )
+
+    # -- R_stand: Standing stability rewards
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.78})
+    upward = RewTerm(func=mdp.upward, weight=1.0)  # Reward keeping robot upright
+    feet_contact = RewTerm(
+        func=mdp.feet_contact_without_cmd,
+        weight=0.5,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),
+            "command_name": None,  # Always reward feet contact for stability
+        },
+    )
+
+    # -- R_reg: Regularization rewards
     base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
     joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
@@ -390,10 +444,6 @@ class RewardsCfg:
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_roll_joint", ".*_hip_yaw_joint"])},
     )
-
-    # -- robot
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.78})
 
     # -- other
     undesired_contacts = RewTerm(
