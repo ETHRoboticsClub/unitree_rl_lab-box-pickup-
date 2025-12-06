@@ -155,7 +155,7 @@ class EventCfg:
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
-
+# command for standing 
 @configclass
 class CommandsCfg:
     """Command specifications for the MDP."""
@@ -163,17 +163,24 @@ class CommandsCfg:
     base_velocity = mdp.UniformLevelVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
-        rel_standing_envs=0.02,
+        rel_standing_envs=1.0,      # <--- all envs are "standing envs"
         rel_heading_envs=1.0,
         heading_command=False,
         debug_vis=True,
         ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.1, 0.1), lin_vel_y=(-0.1, 0.1), ang_vel_z=(-0.1, 0.1)
+            lin_vel_x=(0.0, 0.0),   # <--- no forward/backward command
+            lin_vel_y=(0.0, 0.0),   # <--- no lateral command
+            ang_vel_z=(0.0, 0.0),   # <--- no turning command
         ),
         limit_ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.0), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
+            lin_vel_x=(0.0, 0.0),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
         ),
     )
+
+   
+
 
 
 @configclass
@@ -241,23 +248,25 @@ class RewardsCfg:
     # -- task
     track_lin_vel_xy = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=1.0,
+        weight=0.0,
         params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     track_ang_vel_z = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+        func=mdp.track_ang_vel_z_exp, weight=0.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
 
-    alive = RewTerm(func=mdp.is_alive, weight=0.15)
+    alive = RewTerm(func=mdp.is_alive, weight=0.5)
 
     # -- base
     base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
-    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.5)
     joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     energy = RewTerm(func=mdp.energy, weight=-2e-5)
+
+    
 
     joint_deviation_arms = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -292,13 +301,13 @@ class RewardsCfg:
     )
 
     # -- robot
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.78})
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-3.0)
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-5.0, params={"target_height": 0.78})
 
     # -- feet
     gait = RewTerm(
         func=mdp.feet_gait,
-        weight=0.5,
+        weight=0.0,
         params={
             "period": 0.8,
             "offset": [0.0, 0.5],
@@ -317,7 +326,7 @@ class RewardsCfg:
     )
     feet_clearance = RewTerm(
         func=mdp.foot_clearance_reward,
-        weight=1.0,
+        weight=0.0,
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
@@ -335,6 +344,10 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
         },
     )
+    standing = RewTerm(
+        func=mdp.stand_still,
+        weight=-0.5,
+        params={"command_name": "base_velocity"},)
 
 
 @configclass

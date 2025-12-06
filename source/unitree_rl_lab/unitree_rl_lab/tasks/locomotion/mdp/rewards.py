@@ -27,16 +27,19 @@ def energy(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("r
     qfrc = asset.data.applied_torque[:, asset_cfg.joint_ids]
     return torch.sum(torch.abs(qvel) * torch.abs(qfrc), dim=-1)
 
-
+#updated stand_still reward
 def stand_still(
     env: ManagerBasedRLEnv, command_name: str = "base_velocity", asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
 
-    reward = torch.sum(torch.abs(asset.data.joint_pos - asset.data.default_joint_pos), dim=1)
+    joint_dev = torch.sum(torch.abs(asset.data.joint_pos - asset.data.default_joint_pos), dim=1)
     cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1)
-    return reward * (cmd_norm < 0.1)
-
+    #exp reward, might be too strong
+    # stand_reward = torch.exp(-joint_dev)
+    #linear reward
+    stand_reward = joint_dev
+    return stand_reward * (cmd_norm < 0.1)
 
 """
 Robot.
